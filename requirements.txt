@@ -1,5 +1,6 @@
-streamlit
-lightgbm
-plotly
+streamlit==1.32.0
 pandas
 scikit-learn
+lightgbm
+plotly
+joblib
