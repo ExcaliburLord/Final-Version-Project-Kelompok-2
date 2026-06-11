@@ -517,6 +517,10 @@ model, label_encoder, fitur_blueprint = load_assets()
 # ==========================================
 # 4. FUNGSI HELPER
 # ==========================================
+# ── Ekspor Hasil Prediksi ke CSV ─────────────────────────────────────
+def convert_df_to_csv(df):
+        return df.to_csv(index=False).encode('utf-8')
+
 def scale_to_15(val_100: float) -> float:
     """Ubah skala 1-100 (input user) menjadi 1-15 (skala latih model) secara linier."""
     return 1.0 + (float(val_100) - 1.0) * (14.0 / 99.0)
@@ -577,11 +581,14 @@ def detect_archetype(scores: dict) -> tuple[str, str, str]:
     """Deteksi archetype berdasarkan pola skor M1-M9."""
     total = sum(scores.values())
     avg   = total / len(scores)
-    m1, m2, m4, m7, m8 = (
-        scores.get("M1", 50), scores.get("M2", 50),
-        scores.get("M4", 50), scores.get("M7", 50),
-        scores.get("M8", 50),
-    )
+    
+    m1 = scores.get("M1 Background", 50)
+    m2 = scores.get("M2 Hard Skills", 50)
+    m4 = scores.get("M4 Interest", 50)
+    m6 = scores.get("M6 Adaptability", 50) # Panggil M6 ke dalam memori
+    m7 = scores.get("M7 Branding", 50)
+    m8 = scores.get("M8 Ambisi", 50)
+
     if avg >= 70 and m8 >= 70 and m4 >= 70:
         return "🌟 The Visionary Leader", "#0a84ff", (
             "Anda memiliki visi kuat dan dorongan kepemimpinan yang tinggi. "
@@ -598,9 +605,17 @@ def detect_archetype(scores: dict) -> tuple[str, str, str]:
             "Passion yang tinggi dikombinasikan kemampuan personal branding yang kuat. "
             "Anda cocok di lingkungan yang menghargai ide segar dan ekspresi diri."
         )
-    return "🔍 The Adaptive Explorer", "#bf5af2", (
-        "Profil Anda menunjukkan fleksibilitas tinggi dan kemampuan adaptasi lintas "
-        "domain. Kekuatan Anda ada di kemampuan menjembatani berbagai bidang."
+    # Validasi Adaptive Explorer yang sebenarnya
+    if m6 >= 70:
+        return "🔍 The Adaptive Explorer", "#bf5af2", (
+            "Profil Anda menunjukkan fleksibilitas tinggi dan kemampuan adaptasi lintas "
+            "domain. Kekuatan Anda ada di kemampuan menjembatani berbagai bidang."
+        )
+    
+    # Label keranjang sampah (Fallback) yang jujur
+    return "🌱 The Developing Talent", "#8e8e93", (
+        "Profil kompetensi Anda masih dalam tahap perkembangan dasar. Fokus pada "
+        "peningkatan hard skills spesifik dan bangun portofolio untuk memperkuat posisi tawar Anda."
     )
 
 
@@ -1175,6 +1190,33 @@ if page == "🏠  Beranda & Analisis":
     st.session_state["last_result"] = result_entry
     st.session_state["riwayat"].append(result_entry)
 
+    
+
+    laporan_kandidat = pd.DataFrame([{
+        'Waktu Analisis': result_entry['waktu'],
+        'Program Studi': result_entry['jurusan'],
+        'IPK': result_entry['ipk'],
+        'Pekerjaan Impian': result_entry['dream_job'],
+        'Rekomendasi Industri Utama': result_entry['hasil_df'].iloc[0]['Industri'],
+        'Probabilitas Kecocokan': f"{result_entry['hasil_df'].iloc[0]['Kecocokan']:.1f}%",
+        'Archetype Karir': result_entry['archetype'],
+        'Skor Kesiapan Kerja': result_entry['kesiapan_skor'],
+        'Status Kesiapan': result_entry['kesiapan_label'],
+        'Hard Skills (M2)': result_entry['scores']['M2 Hard Skills'],
+        'Branding (M7)': result_entry['scores']['M7 Branding'],
+        'Background Akademik (M1)': result_entry['scores']['M1 Background']
+    }])
+
+    csv_ekspor = convert_df_to_csv(laporan_kandidat)
+
+    st.download_button(
+        label="📥 Unduh Laporan Analisis (CSV)",
+        data=csv_ekspor,
+        file_name=f"Laporan_Kecocokan_Vinix7_{result_entry['waktu'].replace(':', '')}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
     # ── Tab Visualisasi Dashboard (inline) ─────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(
@@ -1211,6 +1253,21 @@ if page == "🏠  Beranda & Analisis":
             height=420,
         )
         st.plotly_chart(fig_radar, use_container_width=True)
+
+        st.plotly_chart(
+            fig_radar, 
+            use_container_width=True,
+            config={
+                'displayModeBar': True,
+                'toImageButtonOptions': {
+                    'format': 'png', 
+                    'filename': 'Radar_Kompetensi_Kandidat_Vinix7',
+                    'height': 700,
+                    'width': 700,
+                    'scale': 2
+                }
+            }
+        )
 
         # Skor kesiapan kerja
         st.markdown(f"""
@@ -1380,6 +1437,36 @@ elif page == "📊  Dashboard Hasil":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # ── Ekspor Hasil Prediksi ke CSV ─────────────────────────
+        def convert_df_to_csv(df):
+            return df.to_csv(index=False).encode('utf-8')
+
+        laporan_kandidat = pd.DataFrame([{
+            'Waktu Analisis': lr['waktu'],
+            'Program Studi': lr['jurusan'],
+            'IPK': lr['ipk'],
+            'Pekerjaan Impian': lr['dream_job'],
+            'Rekomendasi Industri Utama': lr['hasil_df'].iloc[0]['Industri'],
+            'Probabilitas Kecocokan': f"{lr['hasil_df'].iloc[0]['Kecocokan']:.1f}%",
+            'Archetype Karir': lr['archetype'],
+            'Skor Kesiapan Kerja': lr['kesiapan_skor'],
+            'Status Kesiapan': lr['kesiapan_label'],
+            'Hard Skills (M2)': lr['scores']['M2 Hard Skills'],
+            'Branding (M7)': lr['scores']['M7 Branding'],
+            'Background Akademik (M1)': lr['scores']['M1 Background']
+        }])
+
+        csv_ekspor = convert_df_to_csv(laporan_kandidat)
+
+        st.download_button(
+            label="📥 Unduh Laporan Analisis Lengkap (CSV)",
+            data=csv_ekspor,
+            file_name=f"Laporan_Kecocokan_Vinix7_{lr['waktu'].replace(':', '')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+        st.markdown("<br>", unsafe_allow_html=True)
+
         # ── Radar chart ───────────────────────────────────────────────
         dc1, dc2 = st.columns(2)
         with dc1:
@@ -1500,12 +1587,39 @@ elif page == "📋  Riwayat Sesi":
                     st.markdown("<br>", unsafe_allow_html=True) # Spacing
                     
                     # TOMBOL NAVIGASI TERPROGRAM (Menggunakan Callback)
-                    st.button(
+                    st.button( 
                         "📊 Lihat Full Dashboard", 
                         key=f"btn_dash_{idx_asli}", 
                         use_container_width=True,
                         on_click=lompat_ke_dashboard,
                         args=(riwayat[idx_asli],)
+                    )
+
+                    # FITUR BARU: Tombol Download CSV per Sesi Historis
+                    laporan_historis = pd.DataFrame([{
+                        'Waktu Analisis': r['waktu'],
+                        'Program Studi': r['jurusan'],
+                        'IPK': r['ipk'],
+                        'Pekerjaan Impian': r['dream_job'],
+                        'Rekomendasi Industri Utama': r['hasil_df'].iloc[0]['Industri'],
+                        'Probabilitas Kecocokan': f"{r['hasil_df'].iloc[0]['Kecocokan']:.1f}%",
+                        'Archetype Karir': r['archetype'],
+                        'Skor Kesiapan Kerja': r['kesiapan_skor'],
+                        'Status Kesiapan': r['kesiapan_label'],
+                        'Hard Skills (M2)': r['scores']['M2 Hard Skills'],
+                        'Branding (M7)': r['scores']['M7 Branding'],
+                        'Background Akademik (M1)': r['scores']['M1 Background']
+                    }])
+
+                    csv_historis = convert_df_to_csv(laporan_historis)
+
+                    st.download_button(
+                        label="📥 Unduh CSV",
+                        data=csv_historis,
+                        file_name=f"Laporan_Vinix7_{r['waktu'].replace(':', '')}.csv",
+                        mime="text/csv",
+                        key=f"dl_btn_hist_{idx_asli}", # ID absolut agar tidak bentrok
+                        use_container_width=True
                     )
 
         # Detail tiap entri
